@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class GeminiService {
- static const String apiKey = "";
+ static const String apiKey =
+    String.fromEnvironment('GEMINI_API_KEY');
 
   static Future<String> generateRecipe(List<String> ingredients) async {
    final url = Uri.parse(
