@@ -1,0 +1,57 @@
+name: freshtrack
+description: "FreshTrack - Smart Food Inventory & AI Recipe App"
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Firebase
+  firebase_core: ^4.12.1
+  firebase_auth: ^6.5.6
+  cloud_firestore: ^6.0.3
+
+  # Notifications
+  flutter_local_notifications: ^19.0.0
+
+  # Local Storage
+  shared_preferences: ^2.5.3
+
+  # Charts
+  fl_chart: ^0.69.0
+
+  # QR Scanner
+  mobile_scanner: ^6.0.2
+
+  # HTTP
+  http: ^1.2.2
+
+  # AI (Gemini)
+  google_generative_ai: ^0.4.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+  flutter_launcher_icons: ^0.14.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/freshtrack_icon.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/freshtrack_icon.png
