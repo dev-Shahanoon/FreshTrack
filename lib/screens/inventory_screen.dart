@@ -4,824 +4,327 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'edit_food_screen.dart';
 
-
-class InventoryScreen extends StatelessWidget {
-
-
+class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
 
+  @override
+  State<InventoryScreen> createState() => _InventoryScreenState();
+}
 
-
+class _InventoryScreenState extends State<InventoryScreen> {
   String getStatus(int days) {
-
-    if(days < 0){
-
+    if (days < 0) {
       return "Expired";
-
-    }
-    else if(days <= 3){
-
+    } else if (days <= 3) {
       return "Expiring Soon";
-
-    }
-    else{
-
+    } else {
       return "Fresh";
-
     }
-
   }
-
-
-
 
   Color getStatusColor(int days) {
-
-
-    if(days < 0){
-
+    if (days < 0) {
       return Colors.red;
-
-    }
-    else if(days <=3){
-
+    } else if (days <= 3) {
       return Colors.orange;
-
-    }
-    else{
-
+    } else {
       return Colors.green;
-
     }
-
   }
 
+  int getDaysLeft(Timestamp expiry) {
+    final DateTime expiryDate = expiry.toDate();
+    final DateTime today = DateTime.now();
 
-
-
-  int getDaysLeft(Timestamp expiry){
-
-
-    DateTime expiryDate =
-    expiry.toDate();
-
-
-    DateTime today =
-    DateTime.now();
-
-
-
-    return DateTime(
-
+    final DateTime expiryDay = DateTime(
       expiryDate.year,
-
       expiryDate.month,
-
       expiryDate.day,
+    );
 
-    )
-        .difference(
+    final DateTime todayDay = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    );
 
-      DateTime(
-
-        today.year,
-
-        today.month,
-
-        today.day,
-
-      ),
-
-    )
-        .inDays;
-
+    return expiryDay.difference(todayDay).inDays;
   }
-
-
-
-
-
 
   Future<void> deleteFood(String id) async {
-
-
     await FirebaseFirestore.instance
-
         .collection("foods")
-
         .doc(id)
-
         .delete();
-
-
   }
 
+  Future<bool?> handleDismiss(
+    DismissDirection direction,
+    QueryDocumentSnapshot food,
+    Timestamp expiry,
+  ) async {
+    // =========================
+    // DELETE
+    // =========================
+    if (direction == DismissDirection.endToStart) {
+      try {
+        await deleteFood(food.id);
 
+        if (!mounted) {
+          return false;
+        }
 
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Food deleted"),
+          ),
+        );
 
+        return true;
+      } catch (e) {
+        if (!mounted) {
+          return false;
+        }
 
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to delete food: $e"),
+          ),
+        );
+
+        return false;
+      }
+    }
+
+    // =========================
+    // EDIT
+    // =========================
+    if (direction == DismissDirection.startToEnd) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EditFoodScreen(
+            id: food.id,
+            name: food["name"],
+            category: food["category"],
+            expiryDate: expiry.toDate(),
+          ),
+        ),
+      );
+
+      return false;
+    }
+
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final User? user = FirebaseAuth.instance.currentUser;
 
-
-    final user =
-    FirebaseAuth.instance.currentUser;
-
-
-
-    if(user == null){
-
-
+    if (user == null) {
       return const Scaffold(
-
-        body:
-
-        Center(
-
-          child:
-
-          Text("Please login"),
-
+        body: Center(
+          child: Text("Please login"),
         ),
-
       );
-
-
     }
 
-
-
-
-
-
     return Scaffold(
-
-
-
       appBar: AppBar(
-
-
-        title:
-
-        const Text("Inventory"),
-
-
-
-        backgroundColor:
-
-        Colors.green,
-
-
-
-        foregroundColor:
-
-        Colors.white,
-
-
+        title: const Text("Inventory"),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
       ),
-
-
-
-
-
-      body:StreamBuilder<QuerySnapshot>(
-
-
-
-        stream:
-
-        FirebaseFirestore.instance
-
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
             .collection("foods")
-
             .where(
-
-          "userId",
-
-          isEqualTo:user.uid,
-
-        )
-
+              "userId",
+              isEqualTo: user.uid,
+            )
             .snapshots(),
-
-
-
-
-
-        builder:(context,snapshot){
-
-
-
-          if(snapshot.hasError){
-
-
+        builder: (context, snapshot) {
+          // Error
+          if (snapshot.hasError) {
             return Center(
-
-              child:
-
-              Text(
-
+              child: Text(
                 snapshot.error.toString(),
-
               ),
-
             );
-
-
           }
 
-
-
-
-
-          if(snapshot.connectionState ==
-              ConnectionState.waiting){
-
-
+          // Loading
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
             return const Center(
-
-              child:
-
-              CircularProgressIndicator(),
-
+              child: CircularProgressIndicator(),
             );
-
-
           }
 
-
-
-
-
-          if(!snapshot.hasData ||
-              snapshot.data!.docs.isEmpty){
-
-
+          // No data
+          if (!snapshot.hasData ||
+              snapshot.data!.docs.isEmpty) {
             return const Center(
-
-              child:
-
-              Text(
-
+              child: Text(
                 "No food items found",
-
-                style:
-
-                TextStyle(
-
-                  fontSize:18,
-
+                style: TextStyle(
+                  fontSize: 18,
                 ),
-
               ),
-
             );
-
-
           }
 
-
-
-
+          final List<QueryDocumentSnapshot> foods =
+              snapshot.data!.docs;
 
           return ListView.builder(
-
-
-
-            itemCount:
-
-            snapshot.data!.docs.length,
-
-
-
-
-
-            itemBuilder:(context,index){
-
-
-
-              final food =
-              snapshot.data!.docs[index];
-
-
+            itemCount: foods.length,
+            itemBuilder: (context, index) {
+              final QueryDocumentSnapshot food =
+                  foods[index];
 
               final Timestamp expiry =
-              food["expiryDate"];
-
-
+                  food["expiryDate"] as Timestamp;
 
               final int days =
-              getDaysLeft(expiry);
-
-
-
-
-
+                  getDaysLeft(expiry);
 
               return Dismissible(
-
-
-
-                key:
-
-                ValueKey(food.id),
-
-
-
+                key: ValueKey(food.id),
 
                 direction:
+                    DismissDirection.horizontal,
 
-                DismissDirection.horizontal,
-
-
-
-
-
-                background:
-
-                Container(
-
-
-                  alignment:
-
-                  Alignment.centerLeft,
-
-
-                  padding:
-
-                  const EdgeInsets.only(left:20),
-
-
-
-                  color:
-
-                  Colors.green,
-
-
-
-                  child:
-
-                  const Icon(
-
+                // =========================
+                // SWIPE RIGHT = EDIT
+                // =========================
+                background: Container(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.only(
+                    left: 20,
+                  ),
+                  color: Colors.green,
+                  child: const Icon(
                     Icons.edit,
-
-                    color:
-
-                    Colors.white,
-
+                    color: Colors.white,
                   ),
-
-
                 ),
 
-
-
-
-
-                secondaryBackground:
-
-                Container(
-
-
-                  alignment:
-
-                  Alignment.centerRight,
-
-
-                  padding:
-
-                  const EdgeInsets.only(right:20),
-
-
-
-                  color:
-
-                  Colors.red,
-
-
-
-                  child:
-
-                  const Icon(
-
+                // =========================
+                // SWIPE LEFT = DELETE
+                // =========================
+                secondaryBackground: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(
+                    right: 20,
+                  ),
+                  color: Colors.red,
+                  child: const Icon(
                     Icons.delete,
-
-                    color:
-
-                    Colors.white,
-
+                    color: Colors.white,
                   ),
-
-
                 ),
 
-
-
-
-
-
-                confirmDismiss:
-
-                    (direction) async {
-
-
-
-                  if(direction ==
-                      DismissDirection.endToStart){
-
-
-
-                    await deleteFood(food.id);
-
-
-
-                    ScaffoldMessenger.of(context)
-
-                        .showSnackBar(
-
-                      const SnackBar(
-
-                        content:
-
-                        Text(
-                          "Food deleted",
-                        ),
-
-                      ),
-
-                    );
-
-
-
-                    return true;
-
-
-                  }
-
-
-
-
-
-
-
-                  if(direction ==
-                      DismissDirection.startToEnd){
-
-
-
-                    Navigator.push(
-
-
-                      context,
-
-
-                      MaterialPageRoute(
-
-
-                        builder:(context)=>
-
-
-                        EditFoodScreen(
-
-
-                          id:
-
-                          food.id,
-
-
-
-                          name:
-
-                          food["name"],
-
-
-
-                          category:
-
-                          food["category"],
-
-
-
-                          expiryDate:
-
-                          expiry.toDate(),
-
-
-                        ),
-
-
-                      ),
-
-
-                    );
-
-
-
-                    return false;
-
-
-                  }
-
-
-
-                  return false;
-
-
-
+                confirmDismiss: (direction) {
+                  return handleDismiss(
+                    direction,
+                    food,
+                    expiry,
+                  );
                 },
 
-
-
-
-
-
-
-
-                child:
-
-                Card(
-
-
-
-                  margin:
-
-                  const EdgeInsets.symmetric(
-
-                    horizontal:15,
-
-                    vertical:8,
-
+                child: Card(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 8,
                   ),
+                  elevation: 3,
 
-
-
-                  elevation:
-
-                  3,
-
-
-
-
-
-                  child:
-
-                  ListTile(
-
-
-
-
-                    leading:
-
-                    CircleAvatar(
-
-
+                  child: ListTile(
+                    // =========================
+                    // ICON
+                    // =========================
+                    leading: CircleAvatar(
                       backgroundColor:
-
-                      getStatusColor(days),
-
-
-
-                      child:
-
-                      const Icon(
-
+                          getStatusColor(days),
+                      child: const Icon(
                         Icons.fastfood,
-
-                        color:
-
-                        Colors.white,
-
+                        color: Colors.white,
                       ),
-
-
                     ),
 
-
-
-
-
-                    title:
-
-                    Text(
-
-
-                      food["name"],
-
-
-
-                      style:
-
-                      const TextStyle(
-
-                        fontWeight:
-
-                        FontWeight.bold,
-
+                    // =========================
+                    // FOOD NAME
+                    // =========================
+                    title: Text(
+                      food["name"].toString(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
                       ),
-
-
                     ),
 
-
-
-
-
-                    subtitle:
-
-                    Column(
-
-
-
+                    // =========================
+                    // DETAILS
+                    // =========================
+                    subtitle: Column(
                       crossAxisAlignment:
-
-                      CrossAxisAlignment.start,
-
-
-
-                      children:[
-
-
-
-
+                          CrossAxisAlignment.start,
+                      children: [
                         Text(
-
-                          food["category"],
-
+                          food["category"].toString(),
                         ),
 
-
-
-
-
                         Text(
-
                           "Expires: ${expiry.toDate().toString().split(" ")[0]}",
-
                         ),
-
-
-
-
 
                         Text(
-
-
                           days < 0
-
-                              ?
-
-                          "${days.abs()} days expired"
-
-                              :
-
-                          "$days days remaining",
-
-
-
-                          style:
-
-                          TextStyle(
-
-
+                              ? "${days.abs()} days expired"
+                              : days == 0
+                                  ? "Expires today"
+                                  : "$days days remaining",
+                          style: TextStyle(
                             color:
-
-                            getStatusColor(days),
-
-
-
+                                getStatusColor(days),
                             fontWeight:
-
-                            FontWeight.bold,
-
-
+                                FontWeight.bold,
                           ),
-
-
                         ),
-
-
-
-
                       ],
-
-
-
                     ),
 
-
-
-
-
-
-
-                    trailing:
-
-                    Container(
-
-
-
+                    // =========================
+                    // STATUS
+                    // =========================
+                    trailing: Container(
                       padding:
-
-                      const EdgeInsets.symmetric(
-
-                        horizontal:10,
-
-                        vertical:5,
-
+                          const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
                       ),
-
-
-
-                      decoration:
-
-                      BoxDecoration(
-
-
+                      decoration: BoxDecoration(
                         color:
-
-                        getStatusColor(days),
-
-
-
+                            getStatusColor(days),
                         borderRadius:
-
-                        BorderRadius.circular(20),
-
-
+                            BorderRadius.circular(20),
                       ),
-
-
-
-
-                      child:
-
-                      Text(
-
-
-
+                      child: Text(
                         getStatus(days),
-
-
-
-                        style:
-
-                        const TextStyle(
-
-
-
-                          color:
-
-                          Colors.white,
-
-
-
-                          fontSize:12,
-
-
-
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
                         ),
-
-
-
                       ),
-
-
-
                     ),
-
-
-
-
                   ),
-
-
-
                 ),
-
-
-
               );
-
-
             },
-
-
-
           );
-
-
         },
-
-
       ),
-
-
-
     );
-
-
   }
-
-
 }

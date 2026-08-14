@@ -3,23 +3,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ============================================
+    // USERS
+    // ============================================
+
+    match /users/{userId} {
+
+      // A user can create their own profile
+      allow create: if request.auth != null
+                    && request.auth.uid == userId;
+
+      // A user can read their own profile
+      allow read: if request.auth != null
+                   && request.auth.uid == userId;
+
+      // A user can update their own profile
+      allow update: if request.auth != null
+                    && request.auth.uid == userId;
+
+      // A user can delete their own profile
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+
+    // ============================================
+    // FOODS
+    // ============================================
+
     match /foods/{foodId} {
 
-      // Users can create food only for themselves
+      // Create food only for yourself
       allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid;
 
-      // Users can read only their own food
+      // Read only your own food
       allow read: if request.auth != null
                    && resource.data.userId == request.auth.uid;
 
-      // Users can update only their own food
-      // and cannot change the owner
+      // Update only your own food
       allow update: if request.auth != null
-                    && resource.data.userId == request.auth.uid
-                    && request.resource.data.userId == request.auth.uid;
+                    && resource.data.userId == request.auth.uid;
 
-      // Users can delete only their own food
+      // Delete only your own food
       allow delete: if request.auth != null
                     && resource.data.userId == request.auth.uid;
     }

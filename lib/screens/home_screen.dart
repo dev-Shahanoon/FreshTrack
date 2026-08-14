@@ -11,1424 +11,814 @@ import 'alerts_screen.dart';
 import 'recipe_screen.dart';
 import 'food_status_screen.dart';
 
-
 class HomeScreen extends StatefulWidget {
-
   const HomeScreen({super.key});
 
-
   @override
-  State<HomeScreen> createState() =>
-      _HomeScreenState();
-
+  State<HomeScreen> createState() => _HomeScreenState();
 }
-
-
 
 class _HomeScreenState extends State<HomeScreen> {
-  final User? user = FirebaseAuth.instance.currentUser;
+  User? get user => FirebaseAuth.instance.currentUser;
 
+  Stream<DocumentSnapshot<Map<String, dynamic>>> getUserStream() {
+    final currentUser = FirebaseAuth.instance.currentUser;
 
-Stream<DocumentSnapshot> getUserStream() {
-
-  if (user == null) {
-    return const Stream.empty();
-  }
-
-  return FirebaseFirestore.instance
-      .collection("users")
-      .doc(user!.uid)
-      .snapshots();
-
-}
-  Stream<QuerySnapshot> getFoodStream() {
-    if (user == null) {
-      return const Stream<QuerySnapshot>.empty();
+    if (currentUser == null) {
+      return const Stream.empty();
     }
 
     return FirebaseFirestore.instance
-        .collection("foods")
-        .where("userId", isEqualTo: user!.uid)
+        .collection('users')
+        .doc(currentUser.uid)
         .snapshots();
   }
 
-  int calculateDays(Timestamp expiry){
+  Stream<QuerySnapshot<Map<String, dynamic>>> getFoodStream() {
+    final currentUser = FirebaseAuth.instance.currentUser;
 
-    DateTime expiryDate =
-    expiry.toDate();
+    if (currentUser == null) {
+      return const Stream.empty();
+    }
 
-    DateTime now =
-    DateTime.now();
+    return FirebaseFirestore.instance
+        .collection('foods')
+        .where('userId', isEqualTo: currentUser.uid)
+        .snapshots();
+  }
 
+  int calculateDays(Timestamp expiry) {
+    final expiryDate = expiry.toDate();
+    final now = DateTime.now();
 
-    return DateTime(
+    final expiryDay = DateTime(
       expiryDate.year,
       expiryDate.month,
       expiryDate.day,
-    )
-        .difference(
-      DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ),
-    )
-        .inDays;
+    );
 
+    final today = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    );
+
+    return expiryDay.difference(today).inDays;
   }
-
-
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = user;
 
+    if (currentUser == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Please login'),
+        ),
+      );
+    }
 
     return Scaffold(
-
-      backgroundColor:
-      Theme.of(context)
-          .scaffoldBackgroundColor,
-
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
 
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
 
-        elevation:0,
-
-        backgroundColor:
-        Colors.transparent,
-
-
-        title:Text(
-
-          "FreshTrack",
-
-          style:TextStyle(
-
-            color:
-            Theme.of(context)
-                .colorScheme
-                .primary,
-
-            fontSize:28,
-
-            fontWeight:
-            FontWeight.bold,
-
+        title: Text(
+          'FreshTrack',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
           ),
-
         ),
 
-
-        actions:[
-
+        actions: [
           IconButton(
-
-            icon:Icon(
-
+            icon: Icon(
               Icons.person,
-
-              color:
-              Theme.of(context)
-                  .colorScheme
-                  .primary,
-
+              color: Theme.of(context).colorScheme.primary,
             ),
-
-
-            onPressed:(){
-
+            onPressed: () {
               Navigator.push(
-
                 context,
-
                 MaterialPageRoute(
-
-                  builder:(_)=>
-                  const ProfileScreen(),
-
+                  builder: (_) => const ProfileScreen(),
                 ),
-
               );
-
             },
-
-          )
-
+          ),
         ],
-
-
       ),
 
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: getFoodStream(),
 
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  'Something went wrong:\n${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
 
-      body:StreamBuilder<QuerySnapshot>(
-
-
-        stream:getFoodStream(),
-
-
-
-        builder:(context,snapshot){
-
-
-          if(!snapshot.hasData){
-
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-
-              child:
-              CircularProgressIndicator(),
-
+              child: CircularProgressIndicator(),
             );
-
           }
 
+          final foods = snapshot.data?.docs ?? [];
 
+          int total = foods.length;
+          int fresh = 0;
+          int expiring = 0;
+          int expired = 0;
 
-          int total =
-          snapshot.data!.docs.length;
+          for (final food in foods) {
+            final data = food.data();
 
+            final expiry = data['expiryDate'];
 
-          int fresh=0;
-          int expiring=0;
-          int expired=0;
+            if (expiry is! Timestamp) {
+              continue;
+            }
 
+            final days = calculateDays(expiry);
 
-
-          for(var food in snapshot.data!.docs){
-
-
-            int days =
-            calculateDays(
-              food["expiryDate"],
-            );
-
-
-            if(days < 0){
-
+            if (days < 0) {
               expired++;
-
-            }
-            else if(days <=3){
-
+            } else if (days <= 3) {
               expiring++;
-
-            }
-            else{
-
+            } else {
               fresh++;
-
             }
-
           }
-
-
 
           return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
 
-            padding:
-            const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
 
-
-            child:Column(
-
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-
-
-              children:[
-
+              children: [
+                // --------------------------------------------------
+                // WELCOME CARD
+                // --------------------------------------------------
 
                 Container(
+                  width: double.infinity,
 
-                  width:
-                  double.infinity,
+                  padding: const EdgeInsets.all(25),
 
-                  padding:
-                  const EdgeInsets.all(25),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(30),
 
-
-                  decoration:BoxDecoration(
-
-                    borderRadius:
-                    BorderRadius.circular(30),
-
-
-                    gradient:
-                    const LinearGradient(
-
-                      colors:[
-
+                    gradient: const LinearGradient(
+                      colors: [
                         Color(0xff1B5E20),
-
                         Color(0xff4CAF50),
-
                       ],
-
                     ),
-
                   ),
-
 
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                    const Text(
-      "👋 Welcome Back",
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: 28,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
 
-    const SizedBox(height: 6),
+                    children: [
+                      const Text(
+                        '👋 Welcome Back',
 
-  StreamBuilder<DocumentSnapshot>(
-  stream: getUserStream(),
-  builder: (context, snapshot) {
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
 
-    String name = "User";
+                      const SizedBox(height: 6),
 
-    if (snapshot.hasData && snapshot.data!.exists) {
+                      StreamBuilder<
+                          DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: getUserStream(),
 
-      var data =
-          snapshot.data!.data()
-          as Map<String, dynamic>;
+                        builder: (context, snapshot) {
+                          String name = 'User';
 
-      name = data["name"] ?? "User";
+                          if (snapshot.hasData &&
+                              snapshot.data!.exists) {
+                            final data = snapshot.data!.data();
 
-    }
+                            if (data != null) {
+                              final savedName = data['name'];
 
+                              if (savedName != null &&
+                                  savedName.toString().trim().isNotEmpty) {
+                                name = savedName.toString().trim();
+                              }
+                            }
+                          }
 
-    return Text(
-      name,
-      style: const TextStyle(
-        color: Colors.white70,
-        fontSize: 18,
-        fontWeight: FontWeight.w500,
-      ),
-    );
+                          // Fallback to Firebase Auth display name.
+                          if (name == 'User') {
+                            final displayName =
+                                FirebaseAuth.instance.currentUser
+                                    ?.displayName;
 
-  },
-),
+                            if (displayName != null &&
+                                displayName.trim().isNotEmpty) {
+                              name = displayName.trim();
+                            }
+                          }
 
-    const SizedBox(height: 10),
+                          return Text(
+                            name,
 
-    const Text(
-      "Manage your food smarter.\nReduce waste effortlessly.",
-      style: TextStyle(
-        color: Colors.white70,
-        fontSize: 16,
-      ),
-    ),
-  ],
-),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      const Text(
+                        'Manage your food smarter.\n'
+                        'Reduce waste effortlessly.',
+
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
 
+                const SizedBox(height: 30),
 
-                const SizedBox(height:30),
-
+                // --------------------------------------------------
+                // DASHBOARD
+                // --------------------------------------------------
 
                 const Text(
+                  'Dashboard',
 
-                  "Dashboard",
-
-                  style:TextStyle(
-
-                    fontSize:23,
-
-                    fontWeight:
-                    FontWeight.bold,
-
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.bold,
                   ),
-
                 ),
 
-
-                const SizedBox(height:15),
-
+                const SizedBox(height: 15),
 
                 Row(
-
-                  children:[
-
+                  children: [
                     Expanded(
-
-                      child:StatCard(
-
-                        title:"Total",
-
-                        value:"$total",
-
-                        icon:
-                        Icons.inventory_2,
-
-                        color:
-                        Colors.blue,
-
-                        status:
-                        "Total",
-
+                      child: StatCard(
+                        title: 'Total',
+                        value: '$total',
+                        icon: Icons.inventory_2,
+                        color: Colors.blue,
+                        status: 'Total',
                       ),
-
                     ),
 
-
-                    const SizedBox(width:15),
-
+                    const SizedBox(width: 15),
 
                     Expanded(
-
-                      child:StatCard(
-
-                        title:"Fresh",
-
-                        value:"$fresh",
-
-                        icon:
-                        Icons.check_circle,
-
-                        color:
-                        Colors.green,
-
-                        status:
-                        "Fresh",
-
+                      child: StatCard(
+                        title: 'Fresh',
+                        value: '$fresh',
+                        icon: Icons.check_circle,
+                        color: Colors.green,
+                        status: 'Fresh',
                       ),
-
                     ),
-
                   ],
-
                 ),
 
+                const SizedBox(height: 15),
 
-                const SizedBox(height:15),
-                               Row(
-
-                  children:[
-
-
+                Row(
+                  children: [
                     Expanded(
-
-                      child:StatCard(
-
-                        title:"Expiring",
-
-                        value:"$expiring",
-
-                        icon:
-                        Icons.warning_amber,
-
-                        color:
-                        Colors.orange,
-
-                        status:
-                        "Expiring",
-
+                      child: StatCard(
+                        title: 'Expiring',
+                        value: '$expiring',
+                        icon: Icons.warning_amber,
+                        color: Colors.orange,
+                        status: 'Expiring',
                       ),
-
                     ),
 
-
-
-                    const SizedBox(width:15),
-
-
+                    const SizedBox(width: 15),
 
                     Expanded(
-
-                      child:StatCard(
-
-                        title:"Expired",
-
-                        value:"$expired",
-
-                        icon:
-                        Icons.cancel,
-
-                        color:
-                        Colors.red,
-
-                        status:
-                        "Expired",
-
+                      child: StatCard(
+                        title: 'Expired',
+                        value: '$expired',
+                        icon: Icons.cancel,
+                        color: Colors.red,
+                        status: 'Expired',
                       ),
-
                     ),
-
-
                   ],
-
-
                 ),
 
+                const SizedBox(height: 30),
 
-
-                const SizedBox(height:30),
-
-
+                // --------------------------------------------------
+                // QUICK ACTIONS
+                // --------------------------------------------------
 
                 const Text(
+                  'Quick Actions',
 
-                  "Quick Actions",
-
-                  style:TextStyle(
-
-                    fontSize:23,
-
-                    fontWeight:
-                    FontWeight.bold,
-
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.bold,
                   ),
-
                 ),
 
-
-
-                const SizedBox(height:15),
-
-
-
+                const SizedBox(height: 15),
 
                 GridView.count(
-
-                  shrinkWrap:true,
+                  shrinkWrap: true,
 
                   physics:
-                  const NeverScrollableScrollPhysics(),
+                      const NeverScrollableScrollPhysics(),
 
+                  crossAxisCount: 2,
 
-                  crossAxisCount:2,
+                  crossAxisSpacing: 15,
 
+                  mainAxisSpacing: 15,
 
-                  crossAxisSpacing:15,
-
-                  mainAxisSpacing:15,
-
-
-
-                  children:[
-
-
-
+                  children: [
                     ActionCard(
-
-                      icon:
-                      Icons.qr_code_scanner,
-
-                      title:
-                      "Scan Food",
-
-                      page:
-                      const ScanScreen(),
-
+                      icon: Icons.qr_code_scanner,
+                      title: 'Scan Food',
+                      page: const ScanScreen(),
                     ),
 
-
-
-
                     ActionCard(
-
-                      icon:
-                      Icons.inventory_2,
-
-                      title:
-                      "Inventory",
-
-                      page:
-                      const InventoryScreen(),
-
+                      icon: Icons.inventory_2,
+                      title: 'Inventory',
+                      page: const InventoryScreen(),
                     ),
 
-
-
-
                     ActionCard(
-
-                      icon:
-                      Icons.restaurant_menu,
-
-                      title:
-                      "Recipes",
-
-                      page:
-                      RecipeScreen(),
-
+                      icon: Icons.restaurant_menu,
+                      title: 'Recipes',
+                      page: RecipeScreen(),
                     ),
 
-
-
-
                     ActionCard(
-
-                      icon:
-                      Icons.bar_chart,
-
-                      title:
-                      "Analytics",
-
-                      page:
-                      const AnalyticsScreen(),
-
+                      icon: Icons.bar_chart,
+                      title: 'Analytics',
+                      page: const AnalyticsScreen(),
                     ),
 
-
-
-
                     ActionCard(
-
-                      icon:
-                      Icons.notifications_active,
-
-                      title:
-                      "Alerts",
-
-                      page:
-                      const AlertsScreen(),
-
+                      icon: Icons.notifications_active,
+                      title: 'Alerts',
+                      page: const AlertsScreen(),
                     ),
 
-
-
-
                     ActionCard(
-
-                      icon:
-                      Icons.person,
-
-                      title:
-                      "Profile",
-
-                      page:
-                      const ProfileScreen(),
-
+                      icon: Icons.person,
+                      title: 'Profile',
+                      page: const ProfileScreen(),
                     ),
-
-
-
                   ],
-
-
-                ),
-                const SizedBox(height:25),
-
-
-const Text(
-
-  "Expiring Soon",
-
-  style:TextStyle(
-
-    fontSize:23,
-
-    fontWeight:
-    FontWeight.bold,
-
-  ),
-
-),
-
-
-const SizedBox(height:15),
-
-
-StreamBuilder<QuerySnapshot>(
-
-  stream:getFoodStream(),
-
-
-  builder:(context,snapshot){
-
-
-    if(!snapshot.hasData){
-
-      return const SizedBox();
-
-    }
-
-
-
-    var foods = snapshot.data!.docs.where((food){
-
-
-      int days = calculateDays(
-
-        food["expiryDate"],
-
-      );
-
-
-      return days >=0 && days <=3;
-
-
-    }).toList();
-
-
-
-    if(foods.isEmpty){
-
-     return Container(
-
-  width: double.infinity,
-
-  padding:
-  const EdgeInsets.all(18),
-
-
-  decoration: BoxDecoration(
-
-    color:
-    Theme.of(context).cardColor,
-
-
-    borderRadius:
-    BorderRadius.circular(20),
-
-
-    boxShadow:[
-
-
-      BoxShadow(
-
-        color:
-        Colors.green.withValues(alpha:0.10),
-
-        blurRadius:10,
-
-        offset:
-        const Offset(0,4),
-
-      )
-
-
-    ],
-
-
-  ),
-
-
-
-  child: Row(
-
-    children:[
-
-
-      CircleAvatar(
-
-        radius:22,
-
-        backgroundColor:
-        Colors.green.withValues(alpha:0.15),
-
-
-        child:
-        const Icon(
-
-          Icons.check_circle,
-
-          color:
-          Colors.green,
-
-        ),
-
-      ),
-
-
-
-      const SizedBox(width:15),
-
-
-
-
-      const Expanded(
-
-        child:Column(
-
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
-
-
-          children:[
-
-
-            Text(
-
-              "All Good! 🎉",
-
-              style:TextStyle(
-
-                fontSize:16,
-
-                fontWeight:
-                FontWeight.bold,
-
-              ),
-
-            ),
-
-
-
-            SizedBox(height:4),
-
-
-
-            Text(
-
-              "No food is expiring soon.",
-
-              style:TextStyle(
-
-                fontSize:13,
-
-              ),
-
-            ),
-
-
-
-          ],
-
-        ),
-
-      ),
-
-
-
-    ],
-
-  ),
-
-
-);
-
-    }
-
-
-
-    return Column(
-
-      children:foods.take(3).map((food){
-
-
-        int days =
-        calculateDays(
-
-          food["expiryDate"],
-
-        );
-
-
-        return Container(
-
-
-          margin:
-          const EdgeInsets.only(bottom:10),
-
-
-          padding:
-          const EdgeInsets.all(15),
-
-
-
-          decoration:BoxDecoration(
-
-
-            color:
-            Theme.of(context).cardColor,
-
-
-            borderRadius:
-            BorderRadius.circular(18),
-
-
-
-            boxShadow:[
-
-
-              BoxShadow(
-
-                color:
-                Colors.orange.withValues(alpha:0.15),
-
-                blurRadius:8,
-
-                offset:
-                const Offset(0,4),
-
-              )
-
-
-            ],
-
-
-          ),
-
-
-
-
-          child:Row(
-
-            children:[
-
-
-              CircleAvatar(
-
-                backgroundColor:
-                Colors.orange.withValues(alpha:0.15),
-
-
-                child:
-                const Icon(
-
-                  Icons.warning,
-
-                  color:
-                  Colors.orange,
-
                 ),
 
-              ),
+                const SizedBox(height: 25),
 
+                // --------------------------------------------------
+                // EXPIRING SOON
+                // --------------------------------------------------
 
+                const Text(
+                  'Expiring Soon',
 
-              const SizedBox(width:15),
-
-
-
-
-              Expanded(
-
-                child:Column(
-
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
-
-
-                  children:[
-
-
-                    Text(
-
-                      food["name"],
-
-
-                      style:
-                      const TextStyle(
-
-                        fontSize:16,
-
-                        fontWeight:
-                        FontWeight.bold,
-
-                      ),
-
-                    ),
-
-
-                    Text(
-
-                      days==0
-
-                      ? "Expires today"
-
-                      : "Expires in $days days",
-
-
-                      style:
-                      const TextStyle(
-
-                        color:
-                        Colors.orange,
-
-                      ),
-
-                    ),
-
-
-                  ],
-
-
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
 
-              ),
+                const SizedBox(height: 15),
 
-
-
-            ],
-
-          ),
-
-
-        );
-
-
-      }).toList(),
-
-
-    );
-
-
-  },
-
-),
-
-
-
+                _buildExpiringSoon(context),
               ],
-
-
             ),
-
-
           );
-
-
         },
-
-
       ),
-      
 
+      // --------------------------------------------------
+      // ADD FOOD
+      // --------------------------------------------------
 
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.green,
 
+        foregroundColor: Colors.white,
 
-      floatingActionButton:
-      FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
 
+        label: const Text('Add Food'),
 
-        backgroundColor:
-        Colors.green,
-
-
-        icon:
-        const Icon(Icons.add),
-
-
-        label:
-        const Text(
-          "Add Food",
-        ),
-
-
-
-        onPressed:(){
-
-
+        onPressed: () {
           Navigator.push(
-
             context,
-
             MaterialPageRoute(
-
-              builder:(_)=>
-              const AddFoodScreen(),
-
+              builder: (_) => const AddFoodScreen(),
             ),
-
           );
-
-
         },
-
-
       ),
-
-
     );
-
-
   }
 
+  Widget _buildExpiringSoon(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: getFoodStream(),
 
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const SizedBox();
+        }
+
+        if (!snapshot.hasData) {
+          return const SizedBox();
+        }
+
+        final foods = snapshot.data!.docs.where((food) {
+          final data = food.data();
+
+          final expiry = data['expiryDate'];
+
+          if (expiry is! Timestamp) {
+            return false;
+          }
+
+          final days = calculateDays(expiry);
+
+          return days >= 0 && days <= 3;
+        }).toList();
+
+        // --------------------------------------------------
+        // NOTHING EXPIRING
+        // --------------------------------------------------
+
+        if (foods.isEmpty) {
+          return Container(
+            width: double.infinity,
+
+            padding: const EdgeInsets.all(18),
+
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+
+              borderRadius: BorderRadius.circular(20),
+
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.green.withValues(alpha: 0.10),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+
+                  backgroundColor:
+                      Colors.green.withValues(alpha: 0.15),
+
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                  ),
+                ),
+
+                const SizedBox(width: 15),
+
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+
+                    children: [
+                      Text(
+                        'All Good! 🎉',
+
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      SizedBox(height: 4),
+
+                      Text(
+                        'No food is expiring soon.',
+                        style: TextStyle(
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // --------------------------------------------------
+        // SHOW EXPIRING FOOD
+        // --------------------------------------------------
+
+        return Column(
+          children: foods.take(3).map((food) {
+            final data = food.data();
+
+            final expiry = data['expiryDate'] as Timestamp;
+
+            final days = calculateDays(expiry);
+
+            final name =
+                data['name']?.toString() ?? 'Food';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+
+              padding: const EdgeInsets.all(15),
+
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+
+                borderRadius: BorderRadius.circular(18),
+
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        Colors.orange.withValues(alpha: 0.15),
+
+                    blurRadius: 8,
+
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor:
+                        Colors.orange.withValues(alpha: 0.15),
+
+                    child: const Icon(
+                      Icons.warning,
+                      color: Colors.orange,
+                    ),
+                  ),
+
+                  const SizedBox(width: 15),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+
+                      children: [
+                        Text(
+                          name,
+
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        Text(
+                          days == 0
+                              ? 'Expires today'
+                              : 'Expires in $days days',
+
+                          style: const TextStyle(
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
 }
 
-
-
-
-
+// ==========================================================
+// STAT CARD
+// ==========================================================
 
 class StatCard extends StatelessWidget {
-
-
   final String title;
-
   final String value;
-
   final IconData icon;
-
   final Color color;
-
   final String status;
 
-
-
   const StatCard({
-
     super.key,
-
     required this.title,
-
     required this.value,
-
     required this.icon,
-
     required this.color,
-
     required this.status,
-
   });
-
-
 
   @override
   Widget build(BuildContext context) {
-
-
     return InkWell(
+      borderRadius: BorderRadius.circular(22),
 
-      borderRadius:
-      BorderRadius.circular(22),
-
-
-      onTap:(){
-
-
+      onTap: () {
         Navigator.push(
-
           context,
-
           MaterialPageRoute(
-
-            builder:(_)=>
-            FoodStatusScreen(
-
-              status:
-              status,
-
+            builder: (_) => FoodStatusScreen(
+              status: status,
             ),
-
           ),
-
         );
-
-
       },
 
+      child: Container(
+        padding: const EdgeInsets.all(18),
 
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
 
-      child:Container(
+          borderRadius: BorderRadius.circular(22),
 
-        padding:
-        const EdgeInsets.all(18),
-
-
-        decoration:BoxDecoration(
-
-          color:
-          Theme.of(context)
-              .cardColor,
-
-
-          borderRadius:
-          BorderRadius.circular(22),
-
-
-
-          boxShadow:[
-
-
+          boxShadow: [
             BoxShadow(
+              color: color.withValues(alpha: 0.15),
 
-              color:
-              color.withValues(alpha:0.15),
+              blurRadius: 12,
 
-              blurRadius:12,
-
-              offset:
-              const Offset(0,5),
-
-            )
-
-
+              offset: const Offset(0, 5),
+            ),
           ],
-
-
         ),
 
-
-
-        child:Column(
-
-          children:[
-
-
-
+        child: Column(
+          children: [
             CircleAvatar(
-
-              radius:28,
-
+              radius: 28,
 
               backgroundColor:
-              color.withValues(alpha:0.15),
+                  color.withValues(alpha: 0.15),
 
-
-
-              child:Icon(
-
+              child: Icon(
                 icon,
-
-                color:
-                color,
-
-                size:32,
-
+                color: color,
+                size: 32,
               ),
-
-
             ),
 
-
-
-            const SizedBox(height:12),
-
-
+            const SizedBox(height: 12),
 
             Text(
-
               value,
 
-              style:TextStyle(
+              style: TextStyle(
+                fontSize: 26,
 
-                fontSize:26,
+                fontWeight: FontWeight.bold,
 
-                fontWeight:
-                FontWeight.bold,
-
-                color:
-                Theme.of(context)
+                color: Theme.of(context)
                     .textTheme
-                    .bodyLarge!
-                    .color,
-
+                    .bodyLarge
+                    ?.color,
               ),
-
             ),
-
-
 
             Text(title),
 
-
-
-            const SizedBox(height:5),
-
-
+            const SizedBox(height: 5),
 
             Icon(
-
               Icons.arrow_forward_ios,
-
-              size:14,
-
-              color:
-              color,
-
+              size: 14,
+              color: color,
             ),
-
-
-
           ],
-
-
         ),
-
-
       ),
-
-
     );
-
-
   }
+}
 
+// ==========================================================
+// ACTION CARD
+// ==========================================================
 
-} 
 class ActionCard extends StatelessWidget {
-
-
   final IconData icon;
-
   final String title;
-
   final Widget page;
 
-
-
   const ActionCard({
-
     super.key,
-
     required this.icon,
-
     required this.title,
-
     required this.page,
-
   });
-
-
 
   @override
   Widget build(BuildContext context) {
-
-
     return InkWell(
+      borderRadius: BorderRadius.circular(25),
 
-
-      borderRadius:
-      BorderRadius.circular(25),
-
-
-
-      onTap:(){
-
-
+      onTap: () {
         Navigator.push(
-
           context,
-
           MaterialPageRoute(
-
-            builder:(_)=>page,
-
+            builder: (_) => page,
           ),
-
         );
-
-
       },
 
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
 
+          borderRadius: BorderRadius.circular(25),
 
-      child:Container(
-
-
-        decoration:BoxDecoration(
-
-
-          color:
-          Theme.of(context)
-              .cardColor,
-
-
-          borderRadius:
-          BorderRadius.circular(25),
-
-
-          boxShadow:[
-
-
+          boxShadow: [
             BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
 
-              color:
-              Colors.black.withValues(alpha:0.08),
+              blurRadius: 10,
 
-              blurRadius:10,
-
-              offset:
-              const Offset(0,5),
-
-            )
-
-
+              offset: const Offset(0, 5),
+            ),
           ],
-
-
         ),
 
-
-
-
-        child:Column(
-
-
+        child: Column(
           mainAxisAlignment:
-          MainAxisAlignment.center,
+              MainAxisAlignment.center,
 
-
-
-          children:[
-
-
-
+          children: [
             CircleAvatar(
-
-
-              radius:30,
-
-
+              radius: 30,
 
               backgroundColor:
-              Colors.green.withValues(alpha:0.15),
+                  Colors.green.withValues(alpha: 0.15),
 
-
-
-              child:Icon(
-
+              child: Icon(
                 icon,
-
-                color:
-                Colors.green,
-
-                size:32,
-
+                color: Colors.green,
+                size: 32,
               ),
-
-
             ),
 
-
-
-
-            const SizedBox(height:15),
-
-
-
+            const SizedBox(height: 15),
 
             Text(
-
               title,
 
-
-              style:
-              const TextStyle(
-
-                fontSize:16,
-
-                fontWeight:
-                FontWeight.bold,
-
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
-
-
             ),
-
-
-
           ],
-
-
         ),
-
-
       ),
-
-
     );
-
-
   }
-
-
 }
